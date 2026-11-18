@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>일급 자동 계산 프로그램 사전 설문</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+  :root {
+    --bg: #f3f5f4; --card: #ffffff; --ink: #17211f; --muted: #5d6b68;
+    --line: #dde3e1; --accent: #0f766e; --accent-soft: #e3f2ef; --warn: #b42318;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 "Pretendard Variable", Pretendard, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    word-break: keep-all;
+  }
+  main { max-width: 680px; margin: 0 auto; padding: 32px 16px 96px; }
+  .eyebrow { margin: 0; color: var(--accent); font-weight: 700; font-size: 14px; letter-spacing: .04em; }
+  h1 { margin: 4px 0 12px; font-size: 26px; line-height: 1.3; }
+  #intro { margin: 0; color: var(--muted); white-space: pre-line; }
+  .progress { height: 6px; margin: 28px 0 8px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  #bar { height: 100%; width: 0; background: var(--accent); transition: width .25s; }
+  #stepLabel { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+  h2 { margin: 0 0 16px; font-size: 20px; }
+  .q { margin: 0 0 16px; padding: 20px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+  legend { float: left; width: 100%; padding: 0; font-weight: 700; font-size: 17px; line-height: 1.45; }
+  .req { color: var(--warn); font-size: 13px; font-weight: 600; }
+  .ex { clear: both; margin: 0; padding: 6px 0 14px; color: var(--muted); font-size: 14px; }
+  .opt { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+  .opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .opt input[type=radio], .opt input[type=checkbox] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); flex: none; }
+  .opt span { flex: 1; min-width: 0; }
+  input[type=text], textarea {
+    width: 100%; padding: 12px 14px; font: inherit; color: inherit; background: var(--card);
+    border: 1px solid var(--line); border-radius: 10px;
+  }
+  .other { flex-basis: 100%; }
+  textarea { resize: vertical; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .err { margin: 10px 0 0; color: var(--warn); font-size: 14px; font-weight: 600; }
+  .nav { display: flex; gap: 12px; margin-top: 24px; }
+  button { padding: 14px 22px; font: inherit; font-weight: 700; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+  #next, #copy { flex: 1; background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .6; cursor: default; }
+  #done { padding: 32px 20px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  #done h2 { font-size: 22px; }
+  #done textarea { margin: 16px 0 12px; font-size: 14px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">사전 설문</p>
+    <h1 id="title"></h1>
+    <p id="intro"></p>
+  </header>
+  <div id="survey">
+    <div class="progress"><div id="bar"></div></div>
+    <p id="stepLabel"></p>
+    <form id="form" novalidate></form>
+    <div class="nav">
+      <button type="button" id="prev">이전</button>
+      <button type="button" id="next">다음</button>
+    </div>
+  </div>
+  <section id="done" hidden>
+    <h2 id="doneTitle">응답해 주셔서 감사합니다.</h2>
+    <p id="doneText">답변이 잘 전달되었습니다. 이 창은 닫으셔도 됩니다.</p>
+    <div id="fallback" hidden>
+      <textarea id="dump" rows="12" readonly></textarea>
+      <button type="button" id="copy">답변 복사하기</button>
+    </div>
+  </section>
+</main>
+<script>
+const TITLE = '일급 자동 계산 프로그램 사전 설문';
+const INTRO =
+  '출퇴근 시간으로 그날 일급을 자동으로 계산해 주는 프로그램을 만들려고 합니다.\n' +
+  '지금 계산하시는 방식 그대로 만들기 위해 몇 가지를 여쭙니다.\n' +
+  '10분에서 15분 정도 걸립니다. 잘 모르는 질문은 비워 두셔도 됩니다.';
+
+const SECTIONS = [
+  {
+    title: '1. 지금 계산하는 방법',
+    items: [
+      { t: 'text', req: true,
+        q: '지금은 일급을 누가, 무엇으로 계산하고 계신가요?',
+        ex: '경리 담당자가 출퇴근 시간을 엑셀에 옮겨 적고 계산합니다.' },
+      { t: 'text',
+        q: '한 번 계산하는 데 시간이 얼마나 걸리고, 어떤 점이 가장 번거로우신가요?',
+        ex: '직원 30명 기준으로 매일 1시간쯤 걸립니다. 시간을 하나하나 옮겨 적는 일이 가장 힘듭니다.' },
+    ],
+  },
+  {
+    title: '2. 출퇴근 시간 기록',
+    items: [
+      { t: 'choice', req: true, other: true,
+        q: '출퇴근 시간은 어떻게 남기고 계신가요?',
+        ex: '출입문 옆 지문 인식기에 손가락을 찍습니다.',
+        opts: ['지문 인식기나 카드를 찍는 기계', '휴대폰 앱이나 인터넷 서비스', '엑셀에 직접 입력', '종이 장부에 손으로 적음'] },
+      { t: 'short',
+        q: '기계나 앱을 쓰신다면 이름이 무엇인가요?',
+        ex: '세콤, 캡스, 시프티. 모르시면 "모름"이라고 적어 주세요.' },
+      { t: 'choice', req: true,
+        q: '그 기록을 엑셀 파일로 꺼내 볼 수 있나요?',
+        ex: '기계 관리 프로그램에서 "엑셀로 저장" 버튼을 누르면 파일이 만들어집니다.',
+        opts: ['네, 엑셀 파일로 저장할 수 있습니다', '화면으로만 볼 수 있습니다', '잘 모르겠습니다', '해당 없음 (손으로 적거나 엑셀에 직접 입력합니다)'] },
+      { t: 'check', other: true,
+        q: '기록에는 어떤 내용이 적혀 있나요? (모두 골라 주세요)',
+        ex: '홍길동 / 1990-01-01 / 11월 18일 / 출근 08:55 / 퇴근 18:03',
+        opts: ['이름', '생년월일', '사원번호', '부서', '날짜', '출근 시각', '퇴근 시각'] },
+      { t: 'choice', req: true, other: true,
+        q: '이름이 같은 직원이 있을 때는 어떻게 구분하시나요?',
+        ex: '김민수 씨가 두 명이라 생년월일로 구분합니다.',
+        opts: ['사원번호로 구분', '이름과 생년월일로 구분', '이름이 같은 사람이 없어서 이름만으로 충분'] },
+      { t: 'choice',
+        q: '한 사람이 하루에 여러 번 찍는 경우가 있나요?',
+        ex: '점심 먹으러 나갈 때와 들어올 때도 찍습니다.',
+        opts: ['없습니다 (출근 한 번, 퇴근 한 번)', '있습니다 (외출이나 점심 때도 찍습니다)', '잘 모르겠습니다'] },
+      { t: 'text',
+        q: '출근이나 퇴근을 깜빡하고 안 찍은 날은 어떻게 처리하시나요?',
+        ex: '본인에게 확인한 뒤 담당자가 시간을 직접 적어 넣습니다.' },
+      { t: 'choice',
+        q: '밤을 넘겨 다음 날 퇴근하는 근무가 있나요?',
+        ex: '저녁 8시에 출근해서 다음 날 아침 6시에 퇴근합니다.',
+        opts: ['없습니다', '가끔 있습니다', '자주 있습니다'] },
+    ],
+  },
+  {
+    title: '3. 직원과 급여',
+    items: [
+      { t: 'text', req: true,
+        q: '계산 대상 직원은 몇 명쯤이고, 어떤 분들인가요?',
+        ex: '일용직 20명, 아르바이트 5명' },
+      { t: 'choice', req: true, other: true,
+        q: '급여는 어떤 기준으로 정해져 있나요?',
+        ex: '시급 11,000원 또는 하루 15만 원',
+        opts: ['시급 (1시간에 얼마)', '일당 (하루에 얼마)', '사람마다 기준이 다름'] },
+      { t: 'choice', req: true,
+        q: '그 금액은 모든 직원이 같은가요?',
+        ex: '일반 작업자는 시급 11,000원, 반장은 13,000원입니다.',
+        opts: ['모두 같습니다', '업무나 직급에 따라 몇 가지로 나뉩니다', '사람마다 다릅니다'] },
+      { t: 'text',
+        q: '직원마다 금액이 다르다면, 그 금액은 어디에 정리되어 있나요?',
+        ex: '직원 명부 엑셀 파일에 이름 옆에 적혀 있습니다.' },
+      { t: 'text',
+        q: '금액이 중간에 바뀌는 일이 있나요?',
+        ex: '수습 3개월이 끝나면 시급이 오릅니다. 매년 1월에 인상합니다.' },
+    ],
+  },
+  {
+    title: '4. 계산 규칙',
+    items: [
+      { t: 'short', req: true,
+        q: '정해진 근무 시간은 몇 시부터 몇 시까지인가요?',
+        ex: '오전 9시부터 오후 6시까지' },
+      { t: 'text', req: true,
+        q: '점심시간 같은 쉬는 시간은 급여 계산에서 얼마나 빼시나요?',
+        ex: '매일 점심 1시간을 뺍니다. 또는 4시간 일하면 30분, 8시간 일하면 1시간을 뺍니다. 빼지 않으면 "빼지 않음"이라고 적어 주세요.' },
+      { t: 'choice', req: true, other: true,
+        q: '일한 시간은 몇 분 단위로 계산하시나요?',
+        ex: '30분 단위라면 8시간 20분 일한 날을 8시간으로 계산합니다.',
+        opts: ['1분 단위 (찍힌 시간 그대로)', '10분 단위', '30분 단위', '1시간 단위'] },
+      { t: 'choice',
+        q: '단위에 딱 맞지 않고 남는 시간은 어떻게 하시나요?',
+        ex: '30분 단위에서 8시간 20분을 일했다면, 버릴 때는 8시간이고 올릴 때는 8시간 30분입니다.',
+        opts: ['버립니다', '올립니다', '반올림합니다', '해당 없음 (1분 단위 그대로 계산)'] },
+      { t: 'choice', other: true,
+        q: '정해진 시간보다 일찍 출근해서 찍은 시간도 일한 시간으로 치시나요?',
+        ex: '9시 출근인데 8시 40분에 찍어도 9시부터 계산합니다.',
+        opts: ['정해진 출근 시각부터만 계산합니다', '찍은 시각부터 모두 계산합니다'] },
+      { t: 'text',
+        q: '지각이나 조퇴는 어떻게 계산하시나요?',
+        ex: '늦은 시간만큼만 빼고 지급합니다. 또는 10분만 늦어도 30분치를 뺍니다.' },
+      { t: 'check', other: true,
+        q: '기본 급여에 더 얹어 주는 수당이 있나요? (모두 골라 주세요)',
+        ex: '저녁 6시 이후까지 일하면 연장근무 수당을 줍니다.',
+        opts: ['연장근무 수당 (하루 8시간 넘게 일할 때)', '야간근무 수당 (밤 10시부터 새벽 6시 사이)', '휴일근무 수당', '주휴수당 (한 주를 빠짐없이 일하면 주는 하루치 급여)', '없습니다'] },
+      { t: 'text',
+        q: '위 수당을 주신다면 얼마나 더 주시나요?',
+        ex: '연장근무는 시급의 1.5배를 줍니다. 야간근무는 시급의 절반을 더 줍니다.' },
+      { t: 'text',
+        q: '그 밖에 따로 더해 주는 돈이 있나요?',
+        ex: '식대 하루 8,000원, 교통비 하루 5,000원' },
+      { t: 'choice', req: true, other: true,
+        q: '세금이나 보험료를 뺀 금액까지 계산해야 하나요?',
+        ex: '일급 15만 원에서 3.3%인 4,950원을 빼고 145,050원을 지급합니다.',
+        opts: ['빼기 전 금액만 있으면 됩니다', '3.3%를 뺀 금액이 필요합니다', '일용직 세금과 고용보험료를 뺀 금액이 필요합니다', '잘 모르겠습니다'] },
+      { t: 'choice', other: true,
+        q: '금액의 끝자리는 어떻게 정리하시나요?',
+        ex: '145,053원이 나오면 145,050원으로 지급합니다.',
+        opts: ['1원 단위까지 그대로', '10원 미만은 버림', '100원 미만은 버림'] },
+    ],
+  },
+  {
+    title: '5. 계산 결과',
+    items: [
+      { t: 'check', req: true, other: true,
+        q: '계산 결과는 어떤 모양으로 받고 싶으신가요? (모두 골라 주세요)',
+        ex: '엑셀 파일로 받아서 월말에 급여 담당자에게 넘깁니다.',
+        opts: ['엑셀 파일', '프로그램 화면에서 바로 확인', '인쇄할 수 있는 문서 (PDF)', '직원별 급여명세서'] },
+      { t: 'check', req: true, other: true,
+        q: '결과에 꼭 들어가야 하는 내용은 무엇인가요? (모두 골라 주세요)',
+        ex: '홍길동 / 11월 18일 / 09:00 / 18:00 / 8시간 / 88,000원',
+        opts: ['이름', '날짜', '출근 시각', '퇴근 시각', '일한 시간', '일급', '수당 내역', '세금 등 뺀 금액'] },
+      { t: 'check',
+        q: '어느 기간까지 합쳐서 보여 드리면 될까요? (모두 골라 주세요)',
+        ex: '매일 일급을 확인하고, 월말에 한 달치 합계를 봅니다.',
+        opts: ['하루치', '한 주 합계', '한 달 합계'] },
+      { t: 'choice',
+        q: '지금 쓰시는 결과 양식(표 모양)이 정해져 있나요?',
+        ex: '회사에서 쓰는 일급 대장 엑셀 양식이 있습니다.',
+        opts: ['있습니다 (파일을 따로 보내 드리겠습니다)', '없습니다 (알아서 만들어 주세요)'] },
+    ],
+  },
+  {
+    title: '6. 사용하는 환경',
+    items: [
+      { t: 'text', req: true,
+        q: '이 프로그램은 누가 사용하나요?',
+        ex: '경리 담당자 1명이 씁니다. 또는 현장 관리자 3명이 각자 확인합니다.' },
+      { t: 'check', req: true, other: true,
+        q: '어떤 기기에서 사용하실 건가요? (모두 골라 주세요)',
+        ex: '사무실 윈도우 컴퓨터에서 씁니다.',
+        opts: ['윈도우 컴퓨터', '맥 컴퓨터', '휴대폰'] },
+      { t: 'choice',
+        q: '여러 사람이 각자 기기에서 같은 자료를 함께 봐야 하나요?',
+        ex: '경리 담당자가 입력하면 사장님도 자기 컴퓨터에서 볼 수 있어야 합니다.',
+        opts: ['한 대에서만 쓰면 됩니다', '여러 대에서 함께 봐야 합니다'] },
+      { t: 'choice',
+        q: '회사 컴퓨터에 새 프로그램을 설치해도 되나요?',
+        ex: '보안 프로그램이 있어서 전산 담당자 승인을 받아야 합니다.',
+        opts: ['자유롭게 설치할 수 있습니다', '전산 담당자의 허락이 필요합니다', '설치할 수 없습니다', '잘 모르겠습니다'] },
+      { t: 'choice', other: true,
+        q: '얼마나 자주 사용하실 건가요?',
+        ex: '매일 퇴근 시간 이후에 한 번 계산합니다.',
+        opts: ['매일', '일주일에 한 번', '한 달에 한 번'] },
+      { t: 'choice',
+        q: '지난 기록을 저장해 두고 나중에 다시 찾아봐야 하나요?',
+        ex: '지난달 홍길동 씨의 일급을 다시 확인해야 할 때가 있습니다.',
+        opts: ['네, 다시 찾아볼 수 있어야 합니다', '아니요, 그때그때 계산만 하면 됩니다'] },
+      { t: 'choice',
+        q: '계산된 금액을 담당자가 직접 고칠 수 있어야 하나요?',
+        ex: '특별한 사정이 있는 날은 금액을 손으로 바꿉니다.',
+        opts: ['네, 고칠 수 있어야 합니다', '아니요, 계산된 대로만 쓰면 됩니다'] },
+    ],
+  },
+  {
+    title: '7. 일정과 자료',
+    items: [
+      { t: 'short',
+        q: '언제까지 필요하신가요?',
+        ex: '12월 말까지' },
+      { t: 'check',
+        q: '아래 자료 중 보내 주실 수 있는 것을 골라 주세요.',
+        ex: '프로그램 계산이 맞는지 확인하는 데 씁니다. 이름이나 주민번호 같은 개인정보는 지우고 주셔도 됩니다. 파일은 이 설문과 별도로 전달해 주세요.',
+        opts: ['지금 계산에 쓰는 엑셀이나 장부 양식', '실제 출퇴근 기록 며칠치', '그 기록으로 직접 계산하신 일급 결과', '결과 양식 (일급 대장 등)'] },
+      { t: 'short',
+        q: '궁금한 점이 생기면 어느 분께 여쭤보면 될까요?',
+        ex: '총무팀 김OO 대리' },
+      { t: 'text',
+        q: '그 밖에 꼭 들어갔으면 하는 기능이나 하고 싶은 말씀이 있으면 적어 주세요.',
+        ex: '공휴일은 자동으로 표시되면 좋겠습니다.' },
+    ],
+  },
+];
+// 응답을 받을 주소. 비어 있으면 전송 대신 답변을 복사하는 화면이 나온다.
+const ENDPOINT = '';
+
+const $ = id => document.getElementById(id);
+const el = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+const form = $('form');
+$('title').textContent = TITLE;
+$('intro').textContent = INTRO;
+
+let n = 0, step = 0;
+const pages = SECTIONS.map(s => {
+  const page = el('section', { hidden: true }, el('h2', { textContent: s.title }));
+  s.items.forEach(it => {
+    it.name = 'q' + (++n);
+    it.label = n + '. ' + it.q;
+    it.err = el('p', { className: 'err', textContent: '이 질문은 꼭 답해 주세요.', hidden: true });
+    const field = el('fieldset', { className: 'q' },
+      el('legend', {}, it.q, it.req ? el('span', { className: 'req', textContent: ' 필수' }) : ''),
+      el('p', { className: 'ex', textContent: '예) ' + it.ex }));
+    if (it.opts) {
+      const type = it.t === 'choice' ? 'radio' : 'checkbox';
+      it.opts.forEach(o => field.append(el('label', { className: 'opt' },
+        el('input', { type, name: it.name, value: o }), el('span', { textContent: o }))));
+      if (it.other) {
+        const box = el('input', { type, name: it.name, value: '기타' });
+        const text = el('input', { type: 'text', name: it.name + '_other', className: 'other', placeholder: '직접 적어 주세요' });
+        text.addEventListener('input', () => { box.checked = true; });
+        field.append(el('label', { className: 'opt' }, box, el('span', { textContent: '기타' }), text));
+      }
+    } else {
+      field.append(it.t === 'short' ? el('input', { type: 'text', name: it.name }) : el('textarea', { name: it.name, rows: 3 }));
+    }
+    field.append(it.err);
+    it.field = field;
+    page.append(field);
+  });
+  form.append(page);
+  return page;
+});
+
+function answer(it) {
+  const fd = new FormData(form);
+  if (!it.opts) return (fd.get(it.name) || '').trim();
+  return fd.getAll(it.name)
+    .map(v => v === '기타' ? '기타: ' + (fd.get(it.name + '_other') || '').trim() : v)
+    .join(', ');
+}
+
+function show(i) {
+  step = i;
+  pages.forEach((p, k) => { p.hidden = k !== i; });
+  $('bar').style.width = ((i + 1) / pages.length * 100) + '%';
+  $('stepLabel').textContent = (i + 1) + ' / ' + pages.length + ' 단계';
+  $('prev').hidden = i === 0;
+  $('next').textContent = i === pages.length - 1 ? '제출하기' : '다음';
+  window.scrollTo(0, 0);
+}
+
+function validate() {
+  let first = null;
+  SECTIONS[step].items.forEach(it => {
+    const missing = !!it.req && !answer(it);
+    it.err.hidden = !missing;
+    if (missing && !first) first = it.field;
+  });
+  if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  return !first;
+}
+
+async function submit() {
+  const data = {};
+  SECTIONS.forEach(s => s.items.forEach(it => { data[it.label] = answer(it) || '(답 없음)'; }));
+  $('next').disabled = true;
+  $('next').textContent = '보내는 중...';
+  let ok = false;
+  try {
+    const r = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(Object.assign({ _subject: TITLE + ' 응답', _template: 'table', _captcha: 'false' }, data)),
+    });
+    ok = !!ENDPOINT && r.ok && String((await r.json()).success) !== 'false';
+  } catch (e) {}
+  $('survey').hidden = true;
+  $('done').hidden = false;
+  if (!ok) {
+    // 전송이 실패해도 답변을 잃지 않도록 복사할 수 있게 보여 준다.
+    $('doneTitle').textContent = '답변을 자동으로 보내지 못했습니다.';
+    $('doneText').textContent = '아래 내용을 복사해서 담당자에게 문자나 메신저로 보내 주세요.';
+    $('dump').value = Object.keys(data).map(k => k + '\n' + data[k]).join('\n\n');
+    $('fallback').hidden = false;
+  }
+  window.scrollTo(0, 0);
+}
+
+$('prev').onclick = () => show(step - 1);
+$('next').onclick = () => { if (validate()) step < pages.length - 1 ? show(step + 1) : submit(); };
+$('copy').onclick = () => {
+  navigator.clipboard.writeText($('dump').value)
+    .then(() => { $('copy').textContent = '복사했습니다'; })
+    .catch(() => { $('dump').select(); });
+};
+show(0);
+</script>
+</body>
+</html>
